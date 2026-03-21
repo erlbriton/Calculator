@@ -20,22 +20,19 @@ import androidx.compose.ui.window.WindowState
 fun App(windowState: WindowState) {
     var calcMode by remember { mutableIntStateOf(0) } // 0 - Std, 1 - Prg
     var radixMode by remember { mutableStateOf("DEC") }
-    var displayText by remember { mutableStateOf("0") }
+    val logic = remember { CalculatorLogic() }
 
     // Динамическое изменение размера окна
     LaunchedEffect(calcMode) {
         if (calcMode == 1) {
             windowState.size = DpSize(435.dp, 570.dp)
         } else {
-            // Строго 240x400, как в main
             windowState.size = DpSize(240.dp, 400.dp)
         }
     }
 
     MaterialTheme {
-        Surface(modifier = Modifier
-            .fillMaxSize(),
-            color = Color.LightGray) {
+        Surface(modifier = Modifier.fillMaxSize(), color = Color.LightGray) {
             Column(modifier = Modifier.padding(12.dp)) {
 
                 // ВЕРХНЯЯ ПАНЕЛЬ
@@ -55,17 +52,28 @@ fun App(windowState: WindowState) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(60.dp)
-                        .background(Color(0xFFFFFFFF), RoundedCornerShape(4.dp))
+                        .background(Color.White, RoundedCornerShape(4.dp))
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterEnd
                 ) {
-                    Text(displayText, fontSize = 32.sp, color = Color.Black)
+                    Text(
+                        text = logic.displayText,
+                        fontSize = 32.sp,
+                        color = Color.Black
+                    )
                 }
 
                 if (calcMode == 1) {
-                    ProgrammerLayout(radixMode, { radixMode = it }, { displayText = it })
+                    ProgrammerLayout(
+                        radix = radixMode,
+                        onRadixChange = { newRadix ->
+                            logic.convertRadix(radixMode, newRadix)
+                            radixMode = newRadix
+                        },
+                        onInput = { char -> logic.onInput(char, radixMode) }
+                    )
                 } else {
-                    StandardLayout({ displayText = it })
+                    StandardLayout(onInput = { char -> logic.onInput(char, "DEC") })
                 }
             }
         }
@@ -76,8 +84,11 @@ fun App(windowState: WindowState) {
 fun StandardLayout(onInput: (String) -> Unit) {
     Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("←", "CE", "C", "±", "√").forEach {
-                CalcButton(it, Modifier.weight(1f).height(42.dp)) { onInput(it) }
+            listOf("←", "CE", "C", "±", "√").forEach { char ->
+                CalcButton(char, Modifier.weight(1f).height(42.dp)) {
+                    // В Std режиме кнопка "C" — это всегда сброс
+                    onInput(if (char == "C") "RESET_ALL" else char)
+                }
             }
         }
 
@@ -103,9 +114,9 @@ fun StandardLayout(onInput: (String) -> Unit) {
             }
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                CalcButton("%", Modifier.fillMaxWidth().height(42.dp))
-                CalcButton("1/x", Modifier.fillMaxWidth().height(42.dp))
-                CalcButton("=", Modifier.fillMaxWidth().weight(1f), isAccent = true)
+                CalcButton("%", Modifier.fillMaxWidth().height(42.dp)) { onInput("%") }
+                CalcButton("1/x", Modifier.fillMaxWidth().height(42.dp)) { onInput("1/x") }
+                CalcButton("=", Modifier.fillMaxWidth().weight(1f), isAccent = true) { onInput("=") }
             }
         }
     }
@@ -155,7 +166,6 @@ fun ProgrammerLayout(radix: String, onRadixChange: (String) -> Unit, onInput: (S
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEachIndexed { index, char ->
                             val isDigit = char.any { it.isDigit() }
-                            // Считаем HEX-буквой только если символ в первом столбце (A, B, C, D, E)
                             val isHexLetter = index == 0 && char.length == 1 && char[0] in 'A'..'E'
 
                             val isEnabled = when (radix) {
@@ -164,8 +174,12 @@ fun ProgrammerLayout(radix: String, onRadixChange: (String) -> Unit, onInput: (S
                                 else -> true
                             }
 
-                            val width = if (char == "0") 86.dp else 40.dp
-                            CalcButton(char, Modifier.size(width, 40.dp), enabled = isEnabled) { onInput(char) }
+                            val bWidth = if (char == "0") 86.dp else 40.dp
+                            CalcButton(char, Modifier.size(bWidth, 40.dp), enabled = isEnabled) {
+                                // Если C и это НЕ первый столбец — шлем команду сброса
+                                val finalCmd = if (char == "C" && index != 0) "RESET_ALL" else char
+                                onInput(finalCmd)
+                            }
                         }
                     }
                 }
@@ -179,8 +193,16 @@ fun ProgrammerLayout(radix: String, onRadixChange: (String) -> Unit, onInput: (S
     }
 }
 
+// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ (Обязательно должны быть здесь) ---
+
 @Composable
-fun CalcButton(text: String, modifier: Modifier, enabled: Boolean = true, isAccent: Boolean = false, onClick: () -> Unit = {}) {
+fun CalcButton(
+    text: String,
+    modifier: Modifier,
+    enabled: Boolean = true,
+    isAccent: Boolean = false,
+    onClick: () -> Unit = {}
+) {
     Button(
         onClick = onClick,
         enabled = enabled,
@@ -189,7 +211,7 @@ fun CalcButton(text: String, modifier: Modifier, enabled: Boolean = true, isAcce
         contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isAccent) Color(0xFF788EAF) else Color(0xFF5493A8),
-            contentColor = if (isAccent) Color.White else Color(0xFF000000),
+            contentColor = if (isAccent) Color.White else Color.Black,
             disabledContainerColor = Color(0xFFF5F5F5)
         )
     ) {
@@ -198,7 +220,12 @@ fun CalcButton(text: String, modifier: Modifier, enabled: Boolean = true, isAcce
 }
 
 @Composable
-fun ModeButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ModeButton(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxHeight(),

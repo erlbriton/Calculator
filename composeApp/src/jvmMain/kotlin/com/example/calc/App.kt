@@ -1,3 +1,6 @@
+package com.example.calc
+
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -205,7 +208,7 @@ fun ModeButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier:
             containerColor = if (isSelected) Color(0xFF566EAC) else Color.White,
             contentColor = if (isSelected) Color.White else Color(0xFF507DA4)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF505EA4))
+        border = BorderStroke(1.dp, Color(0xFF505EA4))
     ) {
         Text(text, fontSize = 14.sp)
     }

@@ -26,28 +26,28 @@ fun App(windowState: WindowState) {
     var previousSize by remember { mutableStateOf(DpSize(240.dp, 400.dp)) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    // Универсальный метод работы с буфером (Java AWT)
+    // Используем штатный ClipboardManager от Compose
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
     fun copyToClipboard() {
-        try {
-            val selection = java.awt.datatransfer.StringSelection(logic.displayText)
-            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
-        } catch (e: Exception) { /* Ошибка игнорируется */ }
+        // Копируем текст с дисплея
+        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(logic.displayText))
     }
 
     fun pasteFromClipboard() {
-        try {
-            val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
-            if (clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.stringFlavor)) {
-                val content = clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as String
-                if (content.isNotEmpty()) {
-                    logic.onInput("RESET_ALL", radixMode)
-                    content.forEach { char -> logic.onInput(char.toString(), radixMode) }
-                }
+        // Получаем текст и вводим его посимвольно для валидации
+        val clipboardText = clipboardManager.getText()?.text
+        if (!clipboardText.isNullOrEmpty()) {
+            logic.onInput("RESET_ALL", radixMode)
+            clipboardText.forEach { char ->
+                logic.onInput(char.toString(), radixMode)
             }
-        } catch (e: Exception) { /* Ошибка игнорируется */ }
+        }
     }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     LaunchedEffect(calcMode) {
         if (calcMode == 1) windowState.size = DpSize(465.dp, 600.dp)
@@ -79,11 +79,14 @@ fun App(windowState: WindowState) {
                         Text("Embedded Calc v1.1", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF566EAC))
                         Spacer(Modifier.height(8.dp))
                         Text("Инженерный инструмент разработчика для работы с регистрами и битами (STM32/Embedded).")
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text("Функции:", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                         val f = listOf("64-битный Long", "Побитовая панель 0-63", "HEX/BIN/DEC", "Сдвиги RoL/RoR/Lsh/Rsh")
                         f.forEach { Text("• $it", fontSize = 13.sp) }
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text("Created by Vasiltsov Yurii")
+                        Spacer(Modifier.height(8.dp))
+                        Text("telebite@yandex.ru")
                         Text("Barsik Approved 🐾", color = Color.Gray, fontSize = 11.sp)
                     }
                 },
@@ -98,10 +101,17 @@ fun App(windowState: WindowState) {
                 .focusRequester(focusRequester)
                 .focusable()
                 .onKeyEvent { event ->
+                    // Важно: проверяем именно KeyDown, чтобы не было двойного срабатывания
                     if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
                         when {
-                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.C -> { copyToClipboard(); true }
-                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.V -> { pasteFromClipboard(); true }
+                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.C -> {
+                                copyToClipboard()
+                                true
+                            }
+                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.V -> {
+                                pasteFromClipboard()
+                                true
+                            }
                             else -> false
                         }
                     } else false

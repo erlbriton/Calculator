@@ -7,7 +7,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -15,6 +18,9 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowState
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.StringSelection
 
 @Composable
 fun App(windowState: WindowState) {
@@ -22,62 +28,68 @@ fun App(windowState: WindowState) {
     var radixMode by remember { mutableStateOf("DEC") }
     val logic = remember { CalculatorLogic() }
 
-    // Состояния для окна About
     var showAboutDialog by remember { mutableStateOf(false) }
-    // Запоминаем размер, который был до открытия About
     var previousSize by remember { mutableStateOf(DpSize(240.dp, 400.dp)) }
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    // Управление размером основного окна
-    LaunchedEffect(calcMode) {
-        if (calcMode == 1) {
-            windowState.size = DpSize(465.dp, 600.dp)
-        } else {
-            windowState.size = DpSize(240.dp, 400.dp)
-        }
+    // Универсальный метод работы с буфером (Java AWT)
+    fun copyToClipboard() {
+        try {
+            val selection = java.awt.datatransfer.StringSelection(logic.displayText)
+            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
+        } catch (e: Exception) { /* Ошибка игнорируется */ }
     }
 
-    // ЛОГИКА ДЛЯ БОЛЬШОГО ОКНА ABOUT В ЛЮБОМ РЕЖИМЕ
+    fun pasteFromClipboard() {
+        try {
+            val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+            if (clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.stringFlavor)) {
+                val content = clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as String
+                if (content.isNotEmpty()) {
+                    logic.onInput("RESET_ALL", radixMode)
+                    content.forEach { char -> logic.onInput(char.toString(), radixMode) }
+                }
+            }
+        } catch (e: Exception) { /* Ошибка игнорируется */ }
+    }
+
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    LaunchedEffect(calcMode) {
+        if (calcMode == 1) windowState.size = DpSize(465.dp, 600.dp)
+        else windowState.size = DpSize(240.dp, 400.dp)
+    }
+
     LaunchedEffect(showAboutDialog) {
         if (showAboutDialog) {
-            previousSize = windowState.size // Сохраняем текущий размер (Std или Prg)
-            // Если окно маленькое (Std), расширяем его до размеров Prg на время показа About
-            if (windowState.size.width < 400.dp) {
-                windowState.size = DpSize(465.dp, 600.dp)
-            }
+            previousSize = windowState.size
+            if (windowState.size.width < 400.dp) windowState.size = DpSize(465.dp, 600.dp)
         } else {
-            // Когда закрываем About, возвращаем тот размер, который был
             windowState.size = previousSize
         }
     }
 
     MaterialTheme {
-        // ОКНО ABOUT
         if (showAboutDialog) {
             AlertDialog(
                 onDismissRequest = { showAboutDialog = false },
-                modifier = Modifier.width(420.dp).height(520.dp),
+                modifier = Modifier.requiredSize(width = 400.dp, height = 450.dp),
                 confirmButton = {
                     TextButton(onClick = { showAboutDialog = false }) {
-                        Text("Закрыть", fontWeight = FontWeight.Bold, color = Color(0xFF566EAC))
+                        Text("Закрыть", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color(0xFF566EAC))
                     }
                 },
-                title = { Text("О программе", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+                title = { Text("О программе", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
                 text = {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        Text(text = "Embedded Calc v1.1", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF566EAC))
+                        Text("Embedded Calc v1.1", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF566EAC))
                         Spacer(Modifier.height(8.dp))
-                        Text("Инженерный инструмент для разработчиков (STM32/Embedded).")
-                        Spacer(Modifier.height(8.dp))
-                        Text("Функции:", fontWeight = FontWeight.SemiBold)
-                        val f = listOf("64-битный Long", "Панель битов 0..63", "HEX/BIN/DEC", "RoL/RoR/Lsh/Rsh")
+                        Text("Инженерный инструмент разработчика для работы с регистрами и битами (STM32/Embedded).")
+                        Spacer(Modifier.height(16.dp))
+                        Text("Функции:", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                        val f = listOf("64-битный Long", "Побитовая панель 0-63", "HEX/BIN/DEC", "Сдвиги RoL/RoR/Lsh/Rsh")
                         f.forEach { Text("• $it", fontSize = 13.sp) }
-                        Spacer(Modifier.height(8.dp))
-                        Text("Работает на Linux, Windows, Mac, Android")
-                        Spacer(Modifier.height(8.dp))
-                        Text("Код приложение создан Васильцовым Юрием")
-                        Spacer(Modifier.height(8.dp))
-                        Text("Предложения и замечания по адресу: telebite@yandex.ru")
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(16.dp))
                         Text("Barsik Approved 🐾", color = Color.Gray, fontSize = 11.sp)
                     }
                 },
@@ -86,7 +98,22 @@ fun App(windowState: WindowState) {
             )
         }
 
-        Surface(modifier = Modifier.fillMaxSize(), color = Color.LightGray) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onKeyEvent { event ->
+                    if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                        when {
+                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.C -> { copyToClipboard(); true }
+                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.V -> { pasteFromClipboard(); true }
+                            else -> false
+                        }
+                    } else false
+                },
+            color = Color.LightGray
+        ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().height(38.dp),
@@ -100,17 +127,30 @@ fun App(windowState: WindowState) {
                 Spacer(Modifier.height(12.dp))
 
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(60.dp).background(Color.White, RoundedCornerShape(4.dp)).padding(horizontal = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .background(Color.White, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 12.dp)
+                        .clickable { focusRequester.requestFocus() },
                     contentAlignment = Alignment.CenterEnd
                 ) {
-                    Text(text = logic.displayText, fontSize = 32.sp, color = Color.Black)
+                    Text(
+                        text = logic.displayText,
+                        fontSize = 32.sp,
+                        color = Color.Black,
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    )
                 }
 
                 if (calcMode == 1) {
                     ProgrammerLayout(
                         logic = logic,
                         radix = radixMode,
-                        onRadixChange = { newRadix -> logic.convertRadix(radixMode, newRadix); radixMode = newRadix },
+                        onRadixChange = { newRadix ->
+                            logic.convertRadix(radixMode, newRadix)
+                            radixMode = newRadix
+                        },
                         onInput = { char -> logic.onInput(char, radixMode) }
                     )
                 } else {
@@ -120,6 +160,7 @@ fun App(windowState: WindowState) {
         }
     }
 }
+
 @Composable
 fun StandardLayout(onInput: (String) -> Unit) {
     Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -130,19 +171,12 @@ fun StandardLayout(onInput: (String) -> Unit) {
                 }
             }
         }
-
         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(modifier = Modifier.weight(4f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val rows = listOf(
-                    listOf("7", "8", "9", "/"),
-                    listOf("4", "5", "6", "*"),
-                    listOf("1", "2", "3", "-")
-                )
+                val rows = listOf(listOf("7", "8", "9", "/"), listOf("4", "5", "6", "*"), listOf("1", "2", "3", "-"))
                 rows.forEach { row ->
                     Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { char ->
-                            CalcButton(char, Modifier.weight(1f).fillMaxHeight()) { onInput(char) }
-                        }
+                        row.forEach { char -> CalcButton(char, Modifier.weight(1f).fillMaxHeight()) { onInput(char) } }
                     }
                 }
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -151,7 +185,6 @@ fun StandardLayout(onInput: (String) -> Unit) {
                     CalcButton("+", Modifier.weight(1f).fillMaxHeight()) { onInput("+") }
                 }
             }
-
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 CalcButton("%", Modifier.fillMaxWidth().height(42.dp)) { onInput("%") }
                 CalcButton("1/x", Modifier.fillMaxWidth().height(42.dp)) { onInput("1/x") }
@@ -162,47 +195,24 @@ fun StandardLayout(onInput: (String) -> Unit) {
 }
 
 @Composable
-fun ProgrammerLayout(
-    logic: CalculatorLogic,
-    radix: String,
-    onRadixChange: (String) -> Unit,
-    onInput: (String) -> Unit
-) {
+fun ProgrammerLayout(logic: CalculatorLogic, radix: String, onRadixChange: (String) -> Unit, onInput: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxHeight()) {
         Spacer(Modifier.height(8.dp))
-        Win7BitsPanel(
-            bits = logic.getBitsString(radix),
-            onBitClick = { bitIndex -> logic.toggleBit(bitIndex, radix) }
-        )
+        Win7BitsPanel(bits = logic.getBitsString(radix), onBitClick = { logic.toggleBit(it, radix) })
         Spacer(Modifier.height(12.dp))
-
         Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
             Column(
-                modifier = Modifier
-                    .width(80.dp)
-                    .fillMaxHeight()
-                    .border(1.dp, Color.LightGray)
-                    .padding(vertical = 12.dp, horizontal = 4.dp),
-                verticalArrangement = Arrangement.SpaceEvenly,
-                horizontalAlignment = Alignment.Start
+                modifier = Modifier.width(80.dp).fillMaxHeight().border(1.dp, Color.LightGray).padding(vertical = 12.dp, horizontal = 4.dp),
+                verticalArrangement = Arrangement.SpaceEvenly
             ) {
                 listOf("Hex", "Dec", "Bin").forEach { mode ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onRadixChange(mode.uppercase()) }
-                    ) {
-                        RadioButton(
-                            selected = radix == mode.uppercase(),
-                            onClick = { onRadixChange(mode.uppercase()) },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF6750A4))
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onRadixChange(mode.uppercase()) }) {
+                        RadioButton(selected = radix == mode.uppercase(), onClick = { onRadixChange(mode.uppercase()) })
                         Text(mode, fontSize = 12.sp)
                     }
                 }
             }
-
             Spacer(Modifier.width(12.dp))
-
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val rows = listOf(
                     listOf("A", "(", ")", "Mod", "←", "CE", "C"),
@@ -211,28 +221,22 @@ fun ProgrammerLayout(
                     listOf("D", "Lsh", "Rsh", "1", "2", "3", "-"),
                     listOf("E", "Not", "And", "0", ",", "+")
                 )
-
                 rows.forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEachIndexed { index, char ->
                             val isDigit = char.any { it.isDigit() }
-                            val isHexLetter = index == 0 && char.length == 1 && char[0] in 'A'..'E'
-
+                            val isHexL = index == 0 && char.length == 1 && char[0] in 'A'..'E'
                             val isEnabled = when (radix) {
-                                "BIN" -> if (isDigit) (char == "0" || char == "1") else !isHexLetter
-                                "DEC" -> !isHexLetter
+                                "BIN" -> if (isDigit) (char == "0" || char == "1") else !isHexL
+                                "DEC" -> !isHexL
                                 else -> true
                             }
-
-                            val bWidth = if (char == "0") 86.dp else 40.dp
-                            CalcButton(char, Modifier.size(bWidth, 40.dp), enabled = isEnabled) {
-                                val finalCmd = if (char == "C" && index != 0) "RESET_ALL" else char
-                                onInput(finalCmd)
+                            CalcButton(char, Modifier.size(if (char == "0") 86.dp else 40.dp, 40.dp), isEnabled) {
+                                onInput(if (char == "C" && index != 0) "RESET_ALL" else char)
                             }
                         }
                     }
                 }
-
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CalcButton("F", Modifier.size(40.dp), enabled = (radix == "HEX")) { onInput("F") }
                     CalcButton("=", Modifier.size(270.dp, 40.dp), isAccent = true) { onInput("=") }
@@ -245,36 +249,27 @@ fun ProgrammerLayout(
 @Composable
 fun CalcButton(text: String, modifier: Modifier, enabled: Boolean = true, isAccent: Boolean = false, onClick: () -> Unit = {}) {
     Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
+        onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(8.dp),
         contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isAccent) Color(0xFF788EAF) else Color(0xFF5493A8),
             contentColor = if (isAccent) Color.White else Color.Black,
             disabledContainerColor = Color(0xFFF5F5F5)
         )
-    ) {
-        Text(text, fontSize = 14.sp)
-    }
+    ) { Text(text, fontSize = 14.sp) }
 }
 
 @Composable
 fun ModeButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Button(
-        onClick = onClick,
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(4.dp),
+        onClick = onClick, modifier = modifier.fillMaxHeight(), shape = RoundedCornerShape(4.dp),
         contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSelected) Color(0xFF566EAC) else Color.White,
             contentColor = if (isSelected) Color.White else Color(0xFF507DA4)
         ),
         border = BorderStroke(1.dp, Color(0xFF505EA4))
-    ) {
-        Text(text, fontSize = 14.sp)
-    }
+    ) { Text(text, fontSize = 14.sp) }
 }
 
 @Composable
@@ -285,33 +280,20 @@ fun Win7BitsPanel(bits: String, onBitClick: (Int) -> Unit) {
             group.forEachIndexed { i, char ->
                 val actualBitIndex = 63 - (startIndex + i)
                 Text(
-                    text = char.toString(),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
+                    text = char.toString(), fontFamily = FontFamily.Monospace, fontSize = 12.sp,
                     color = if (char == '1') Color(0xFF005FB8) else Color.DarkGray,
-                    modifier = Modifier
-                        .clickable { onBitClick(actualBitIndex) }
-                        .padding(horizontal = 1.dp)
+                    modifier = Modifier.clickable { onBitClick(actualBitIndex) }.padding(horizontal = 1.dp)
                 )
             }
         }
     }
-
     Box(Modifier.fillMaxWidth().background(Color(0xFFE1E8ED)).padding(8.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (i in 0 until 8) BitGroup(bits.substring(i * 4, i * 4 + 4), i * 4)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("63", fontSize = 10.sp); Text("47", fontSize = 10.sp); Text("32", fontSize = 10.sp)
-            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { (0 until 8).forEach { BitGroup(bits.substring(it * 4, it * 4 + 4), it * 4) } }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("63", fontSize = 10.sp); Text("47", fontSize = 10.sp); Text("32", fontSize = 10.sp) }
             Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (i in 8 until 16) BitGroup(bits.substring(i * 4, i * 4 + 4), i * 4)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("31", fontSize = 10.sp); Text("15", fontSize = 10.sp); Text("0", fontSize = 10.sp)
-            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { (8 until 16).forEach { BitGroup(bits.substring(it * 4, it * 4 + 4), it * 4) } }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("31", fontSize = 10.sp); Text("15", fontSize = 10.sp); Text("0", fontSize = 10.sp) }
         }
     }
 }

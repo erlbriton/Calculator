@@ -35,11 +35,19 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.example.calc.MainKt"
-
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.example.calc"
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
+            packageName = "calckb"
             packageVersion = "1.0.0"
+            description = "Калькулятор с поддержкой HEX/DEC и быстрым копированием"
+            copyright = "© 2026 Vasiltsov Yurii"
+            vendor = "Erlbriton" // Твоё имя или бренд
+
+            linux {
+                shortcut = true // Создает ярлык в меню приложений
+                menuGroup = "Utility" // Группа в меню (Утилиты)
+                iconFile.set(project.file("metadata/CalcKb.png")) // ПУТЬ К ТВОЕЙ ИКОНКЕ
+            }
         }
     }
 }

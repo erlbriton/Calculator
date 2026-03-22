@@ -7,163 +7,130 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowState
 
 @Composable
-fun App(windowState: WindowState) {
-    var calcMode by remember { mutableIntStateOf(0) }
-    var radixMode by remember { mutableStateOf("DEC") }
-    val logic = remember { CalculatorLogic() }
+fun App(
+    windowState: WindowState,
+    logic: CalculatorLogic,
+    radixMode: String,
+    onRadixChange: (String) -> Unit
+) {
+    var calcMode by remember { mutableIntStateOf(0) } // 0 - Std, 1 - Prg
+    var showAbout by remember { mutableStateOf(false) }
 
-    var showAboutDialog by remember { mutableStateOf(false) }
-    var previousSize by remember { mutableStateOf(DpSize(240.dp, 400.dp)) }
-    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-
-    // Используем штатный ClipboardManager от Compose
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-
-    fun copyToClipboard() {
-        // Копируем текст с дисплея
-        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(logic.displayText))
-    }
-
-    fun pasteFromClipboard() {
-        // Получаем текст и вводим его посимвольно для валидации
-        val clipboardText = clipboardManager.getText()?.text
-        if (!clipboardText.isNullOrEmpty()) {
-            logic.onInput("RESET_ALL", radixMode)
-            clipboardText.forEach { char ->
-                logic.onInput(char.toString(), radixMode)
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    LaunchedEffect(calcMode) {
-        if (calcMode == 1) windowState.size = DpSize(465.dp, 600.dp)
-        else windowState.size = DpSize(240.dp, 400.dp)
-    }
-
-    LaunchedEffect(showAboutDialog) {
-        if (showAboutDialog) {
-            previousSize = windowState.size
-            if (windowState.size.width < 400.dp) windowState.size = DpSize(465.dp, 600.dp)
-        } else {
-            windowState.size = previousSize
+    // Автоматическое изменение размера окна (About = Prg Size)
+    LaunchedEffect(calcMode, showAbout) {
+        windowState.size = when {
+            showAbout || calcMode == 1 -> DpSize(465.dp, 600.dp)
+            else -> DpSize(240.dp, 400.dp)
         }
     }
 
     MaterialTheme {
-        if (showAboutDialog) {
-            AlertDialog(
-                onDismissRequest = { showAboutDialog = false },
-                modifier = Modifier.requiredSize(width = 400.dp, height = 450.dp),
-                confirmButton = {
-                    TextButton(onClick = { showAboutDialog = false }) {
-                        Text("Закрыть", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color(0xFF566EAC))
-                    }
-                },
-                title = { Text("О программе", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
-                text = {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        Text("Embedded Calc v1.1", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF566EAC))
-                        Spacer(Modifier.height(8.dp))
-                        Text("Инженерный инструмент разработчика для работы с регистрами и битами (STM32/Embedded).")
-                        Spacer(Modifier.height(8.dp))
-                        Text("Функции:", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                        val f = listOf("64-битный Long", "Побитовая панель 0-63", "HEX/BIN/DEC", "Сдвиги RoL/RoR/Lsh/Rsh")
-                        f.forEach { Text("• $it", fontSize = 13.sp) }
-                        Spacer(Modifier.height(8.dp))
-                        Text("Created by Vasiltsov Yurii")
-                        Spacer(Modifier.height(8.dp))
-                        Text("telebite@yandex.ru")
-                        Text("Barsik Approved 🐾", color = Color.Gray, fontSize = 11.sp)
-                    }
-                },
-                shape = RoundedCornerShape(12.dp),
-                containerColor = Color.White
-            )
-        }
-
         Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
-                .onKeyEvent { event ->
-                    // Важно: проверяем именно KeyDown, чтобы не было двойного срабатывания
-                    if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                        when {
-                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.C -> {
-                                copyToClipboard()
-                                true
-                            }
-                            event.isCtrlPressed && event.key == androidx.compose.ui.input.key.Key.V -> {
-                                pasteFromClipboard()
-                                true
-                            }
-                            else -> false
-                        }
-                    } else false
-                },
+            modifier = Modifier.fillMaxSize().focusable(),
             color = Color.LightGray
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
+                // Панель выбора режимов
                 Row(
                     modifier = Modifier.fillMaxWidth().height(38.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ModeButton("Std", calcMode == 0, { calcMode = 0 }, Modifier.weight(1f))
-                    ModeButton("Prg", calcMode == 1, { calcMode = 1 }, Modifier.weight(1f))
-                    ModeButton("About", false, { showAboutDialog = true }, Modifier.weight(1f))
+                    ModeButton("Std", calcMode == 0 && !showAbout, {
+                        calcMode = 0
+                        showAbout = false
+                    }, Modifier.weight(1f))
+
+                    ModeButton("Prg", calcMode == 1 && !showAbout, {
+                        calcMode = 1
+                        showAbout = false
+                    }, Modifier.weight(1f))
+
+                    ModeButton("About", showAbout, {
+                        showAbout = true
+                    }, Modifier.weight(1f))
                 }
 
                 Spacer(Modifier.height(12.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp)
-                        .background(Color.White, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 12.dp)
-                        .clickable { focusRequester.requestFocus() },
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    Text(
-                        text = logic.displayText,
-                        fontSize = 32.sp,
-                        color = Color.Black,
-                        modifier = Modifier.horizontalScroll(rememberScrollState())
-                    )
-                }
+                if (showAbout) {
+                    // Контент блока ABOUT (занимает всё пространство окна Prg)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White, RoundedCornerShape(8.dp))
+                            .padding(24.dp)
+                    ) {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            Text("Embedded Calc v1.1", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color(0xFF566EAC))
+                            Spacer(Modifier.height(12.dp))
+                            Text("Инженерный инструмент разработчика для работы с регистрами и битами (STM32/Embedded).", fontSize = 14.sp)
+                            Spacer(Modifier.height(16.dp))
+                            Text("Функции:", fontWeight = FontWeight.SemiBold)
+                            val f = listOf("64-битный Long", "Побитовая панель 0-63", "HEX/BIN/DEC", "Сдвиги RoL/RoR/Lsh/Rsh", "Копирование по Ctrl+C")
+                            f.forEach { Text("• $it", fontSize = 13.sp) }
+                            Spacer(Modifier.height(24.dp))
+                            Text("Created by Vasiltsov Yurii", fontWeight = FontWeight.Medium)
+                            Text("telebite@yandex.ru")
+                            Spacer(Modifier.height(16.dp))
+                            Text("Barsik Approved 🐾", color = Color.Gray, fontSize = 12.sp)
 
-                if (calcMode == 1) {
-                    ProgrammerLayout(
-                        logic = logic,
-                        radix = radixMode,
-                        onRadixChange = { newRadix ->
-                            logic.convertRadix(radixMode, newRadix)
-                            radixMode = newRadix
-                        },
-                        onInput = { char -> logic.onInput(char, radixMode) }
-                    )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = { showAbout = false },
+                                modifier = Modifier.align(Alignment.End).padding(top = 20.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF566EAC))
+                            ) {
+                                Text("Вернуться", color = Color.White)
+                            }
+                        }
+                    }
                 } else {
-                    StandardLayout(onInput = { char -> logic.onInput(char, "DEC") })
+                    // Основной экран калькулятора
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .background(Color.White, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Text(
+                            text = logic.displayText,
+                            fontSize = 32.sp,
+                            color = Color.Black,
+                            modifier = Modifier.horizontalScroll(rememberScrollState())
+                        )
+                    }
+
+                    if (calcMode == 1) {
+                        ProgrammerLayout(
+                            logic = logic,
+                            radix = radixMode,
+                            onRadixChange = { newR ->
+                                logic.convertRadix(radixMode, newR)
+                                onRadixChange(newR)
+                            },
+                            onInput = { char -> logic.onInput(char, radixMode) }
+                        )
+                    } else {
+                        StandardLayout(onInput = { char -> logic.onInput(char, "DEC") })
+                    }
                 }
             }
         }
     }
 }
+
+// --- ВСЕ ТВОИ ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
 @Composable
 fun StandardLayout(onInput: (String) -> Unit) {

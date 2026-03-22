@@ -3,7 +3,6 @@ package com.example.calc
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import kotlin.math.sqrt
 
 class CalculatorLogic {
     var displayText by mutableStateOf("0")
@@ -14,132 +13,99 @@ class CalculatorLogic {
     private var isWaitingForNextNumber: Boolean = false
 
     fun onInput(char: String, radix: String = "DEC") {
-        val radixInt = when (radix) {
-            "HEX" -> 16
-            "BIN" -> 2
-            else -> 10
-        }
+        val radixInt = if (radix == "HEX") 16 else if (radix == "BIN") 2 else 10
 
         when (char) {
-            // МЕНЯЕМ СТРОГО: Реагируем на специальную команду сброса
-            "RESET_ALL", "CE" -> {
+            "RESET_ALL", "C", "CE" -> {
                 displayText = "0"
                 firstOperand = 0.0
                 currentOperation = null
                 isWaitingForNextNumber = false
             }
-
             "←" -> {
                 if (!isWaitingForNextNumber) {
                     displayText = if (displayText.length > 1) displayText.dropLast(1) else "0"
                 }
             }
-
             "±" -> {
-                if (displayText != "0") {
-                    displayText = if (displayText.startsWith("-")) displayText.substring(1) else "-$displayText"
-                }
+                val currentValue = parseToLong(displayText, radixInt)
+                displayText = renderLong(-currentValue, radixInt)
             }
-
-            "√" -> {
-                val currentVal = parseToDouble(displayText, radixInt)
-                if (currentVal >= 0) {
-                    displayText = formatResult(sqrt(currentVal), radix)
-                    isWaitingForNextNumber = true
-                } else {
-                    displayText = "Error"
-                }
-            }
-
-            "1/x" -> {
-                val currentVal = parseToDouble(displayText, radixInt)
-                if (currentVal != 0.0) {
-                    displayText = formatResult(1.0 / currentVal, radix)
-                } else {
-                    displayText = "Error"
-                }
+            "Not" -> {
+                val currentValue = parseToLong(displayText, radixInt)
+                displayText = renderLong(currentValue.inv(), radixInt)
                 isWaitingForNextNumber = true
             }
-
-            "%" -> {
-                val currentVal = parseToDouble(displayText, radixInt)
-                displayText = formatResult(currentVal / 100.0, radix)
-                isWaitingForNextNumber = true
-            }
-
-            "+", "-", "*", "/", "Mod", "And", "Or", "Xor" -> {
+            "+", "-", "*", "/", "Mod", "And", "Or", "Xor", "Lsh", "Rsh", "RoL", "RoR" -> {
                 firstOperand = parseToDouble(displayText, radixInt)
                 currentOperation = char
                 isWaitingForNextNumber = true
             }
-
             "=" -> {
                 val secondOperand = parseToDouble(displayText, radixInt)
-                val result = when (currentOperation) {
-                    "+" -> firstOperand + secondOperand
-                    "-" -> firstOperand - secondOperand
-                    "*" -> firstOperand * secondOperand
-                    "/" -> if (secondOperand != 0.0) firstOperand / secondOperand else Double.NaN
-                    "Mod" -> if (secondOperand != 0.0) firstOperand % secondOperand else Double.NaN
-                    "And" -> (firstOperand.toLong() and secondOperand.toLong()).toDouble()
-                    "Or" -> (firstOperand.toLong() or secondOperand.toLong()).toDouble()
-                    "Xor" -> (firstOperand.toLong() xor secondOperand.toLong()).toDouble()
-                    else -> secondOperand
+                if (radix == "DEC") {
+                    val res = when (currentOperation) {
+                        "+" -> firstOperand + secondOperand
+                        "-" -> firstOperand - secondOperand
+                        "*" -> firstOperand * secondOperand
+                        "/" -> if (secondOperand != 0.0) firstOperand / secondOperand else 0.0
+                        else -> secondOperand
+                    }
+                    displayText = formatDec(res)
+                } else {
+                    val fL = firstOperand.toLong()
+                    val sL = secondOperand.toLong()
+                    val resL = when (currentOperation) {
+                        "+" -> fL + sL
+                        "-" -> fL - sL
+                        "*" -> fL * sL
+                        "/" -> if (sL != 0L) fL / sL else 0L
+                        "Mod" -> if (sL != 0L) fL % sL else 0L
+                        "And" -> fL and sL
+                        "Or" -> fL or sL
+                        "Xor" -> fL xor sL
+                        "Lsh" -> fL shl sL.toInt()
+                        "Rsh" -> fL ushr sL.toInt()
+                        "RoL" -> java.lang.Long.rotateLeft(fL, sL.toInt())
+                        "RoR" -> java.lang.Long.rotateRight(fL, sL.toInt())
+                        else -> sL
+                    }
+                    displayText = renderLong(resL, radixInt)
                 }
-                displayText = if (result.isNaN()) "Error" else formatResult(result, radix)
                 currentOperation = null
                 isWaitingForNextNumber = true
             }
-
-            "," -> {
-                if (radix == "DEC" && !displayText.contains(",")) {
-                    if (isWaitingForNextNumber) {
-                        displayText = "0,"
-                        isWaitingForNextNumber = false
-                    } else if (displayText.length < 9) {
-                        displayText += ","
-                    }
-                }
-            }
-
             else -> {
-                // Сюда попадут все цифры, HEX-буквы (включая "C")
                 if (isWaitingForNextNumber || displayText == "0") {
                     displayText = char
                     isWaitingForNextNumber = false
                 } else {
-                    val limit = if (radix == "DEC") 9 else 16
-                    if (displayText.length < limit) {
-                        displayText += char
-                    }
+                    if (displayText.length < 16) displayText += char
                 }
             }
         }
     }
 
-    fun convertRadix(oldRadix: String, newRadix: String) {
-        val oldRadixInt = if (oldRadix == "HEX") 16 else if (oldRadix == "BIN") 2 else 10
-        val value = parseToDouble(displayText, oldRadixInt)
-        displayText = formatResult(value, newRadix)
+    fun getBitsString(radix: String): String {
+        val v = parseToLong(displayText, if (radix == "HEX") 16 else if (radix == "BIN") 2 else 10)
+        return v.toULong().toString(2).padStart(64, '0')
     }
 
-    private fun parseToDouble(text: String, radix: Int): Double {
-        val cleanText = text.replace(",", ".")
-        return if (radix == 10) cleanText.toDoubleOrNull() ?: 0.0
-        else cleanText.toLongOrNull(radix)?.toDouble() ?: 0.0
+    fun toggleBit(bitIndex: Int, radix: String) {
+        val rInt = if (radix == "HEX") 16 else if (radix == "BIN") 2 else 10
+        val v = parseToLong(displayText, rInt) xor (1L shl bitIndex)
+        displayText = renderLong(v, rInt)
     }
 
-    private fun formatResult(value: Double, radix: String): String {
-        if (radix != "DEC") {
-            val radixInt = if (radix == "HEX") 16 else 2
-            val res = value.toLong().toString(radixInt).uppercase()
-            return if (res.length > 16) res.take(16) else res
-        }
-        val s = value.toString()
-        var formatted = if (s.endsWith(".0")) s.substring(0, s.length - 2) else s
-        if (formatted.length > 9) {
-            formatted = if (value > 999999999 || value < -99999999) "%.3e".format(value) else formatted.take(9)
-        }
-        return formatted.trimEnd('.').replace(".", ",")
+    fun convertRadix(oldR: String, newR: String) {
+        val oldInt = if (oldR == "HEX") 16 else if (oldR == "BIN") 2 else 10
+        val newInt = if (newR == "HEX") 16 else if (newR == "BIN") 2 else 10
+        val v = parseToLong(displayText, oldInt)
+        displayText = renderLong(v, newInt)
     }
+
+    private fun parseToLong(txt: String, r: Int) = txt.toULongOrNull(r)?.toLong() ?: 0L
+    private fun parseToDouble(txt: String, r: Int) = if (r == 10) txt.replace(",", ".").toDoubleOrNull() ?: 0.0 else parseToLong(txt, r).toDouble()
+    private fun renderLong(v: Long, r: Int) = if (r == 10) v.toString() else v.toULong().toString(r).uppercase()
+    private fun formatDec(v: Double) = v.toString().replace(".0", "").replace(".", ",")
 }

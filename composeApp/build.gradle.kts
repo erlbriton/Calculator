@@ -3,51 +3,69 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)
-    alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.composeHotReload)
 }
 
 kotlin {
+    // Стандартная цель для Desktop, ищет исходники в src/jvmMain
     jvm()
-    
+
     sourceSets {
-        commonMain.dependencies {
-            implementation(libs.compose.runtime)
-            implementation(libs.compose.foundation)
-            implementation(libs.compose.material3)
-            implementation(libs.compose.ui)
-            implementation(libs.compose.components.resources)
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
+        // commonMain — здесь лежат общие зависимости для всех платформ
+        val commonMain by getting {
+            dependencies {
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material)
+                implementation(compose.material3)
+                implementation(compose.ui)
+                implementation(compose.components.resources)
+                implementation(compose.components.uiToolingPreview)
+            }
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-        }
-        jvmMain.dependencies {
-            implementation(compose.desktop.currentOs)
-            implementation(libs.kotlinx.coroutinesSwing)
+
+        // jvmMain — просто добавляем специфические зависимости для Desktop
+        // Gradle САМ сделает его зависимым от commonMain автоматически
+        val jvmMain by getting {
+            dependencies {
+                implementation(compose.desktop.currentOs)
+            }
         }
     }
 }
 
-
 compose.desktop {
     application {
+        // Полный путь к классу с учетом пакета, который мы видели на скриншоте
         mainClass = "com.example.calc.MainKt"
-        nativeDistributions {
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
-            packageName = "calckb"
-            packageVersion = "1.0.0"
-            description = "Калькулятор с поддержкой HEX/DEC и быстрым копированием"
-            copyright = "© 2026 Vasiltsov Yurii"
-            vendor = "Erlbriton" // Твоё имя или бренд
 
+        nativeDistributions {
+            targetFormats(TargetFormat.Exe, TargetFormat.Deb)
+
+            packageName = "CalcKb"
+            packageVersion = "1.0.0"
+            vendor = "erlbriton"
+            description = "Calculator Application"
+
+            // Настройка для Windows
+            windows {
+                shortcut = true
+                // Путь к .ico файлу
+                iconFile.set(project.file("src/jvmMain/composeResources/CalcKb.ico"))
+                // Чтобы не создавалось лишнее консольное окно
+                console = false
+            }
+
+            // Настройка для Linux
             linux {
-                shortcut = true // Создает ярлык в меню приложений
-                menuGroup = "Utility" // Группа в меню (Утилиты)
-                iconFile.set(project.file("metadata/CalcKb.png")) // ПУТЬ К ТВОЕЙ ИКОНКЕ
+                shortcut = true
+                packageName = "calckb"
+                appCategory = "Utility"
+                // Путь к .png файлу
+                iconFile.set(project.file("src/jvmMain/resources/CalcKb.png"))
             }
         }
+
+        // Аргументы JVM для стабильности на Windows
+        jvmArgs += "-Dskiko.renderApi=SOFTWARE"
     }
 }

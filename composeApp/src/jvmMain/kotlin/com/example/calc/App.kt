@@ -28,7 +28,7 @@ fun App(
     // Автоматическое изменение размера окна (About = Prg Size)
     LaunchedEffect(calcMode, showAbout) {
         windowState.size = when {
-            showAbout || calcMode == 1 -> DpSize(465.dp, 600.dp)
+            showAbout || calcMode == 1 -> DpSize(477.dp, 600.dp)
             else -> DpSize(240.dp, 400.dp)
         }
     }

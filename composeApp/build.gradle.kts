@@ -7,9 +7,12 @@ plugins {
     alias(libs.plugins.composeHotReload)
 }
 
+// Определяем ОС для автоматического выбора формата
+val osName = System.getProperty("os.name").lowercase()
+
 kotlin {
     jvm()
-    
+
     sourceSets {
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -21,9 +24,6 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-        }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
@@ -31,22 +31,43 @@ kotlin {
     }
 }
 
-
 compose.desktop {
     application {
         mainClass = "com.example.calc.MainKt"
         nativeDistributions {
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
+            // АВТОМАТИЧЕСКИЙ ВЫБОР ФОРМАТА
+            targetFormats(
+                if (osName.contains("windows")) TargetFormat.Exe else TargetFormat.Deb
+            )
+
             packageName = "calckb"
             packageVersion = "1.0.0"
-            description = "Калькулятор с поддержкой HEX/DEC и быстрым копированием"
+            vendor = "Erlbriton"
             copyright = "© 2026 Vasiltsov Yurii"
-            vendor = "Erlbriton" // Твоё имя или бренд
 
+            // ОБЩАЯ ОПТИМИЗАЦИЯ ДЛЯ ВСЕХ ОС (Минус 15-20 МБ)
+            buildTypes.release.proguard {
+                isEnabled.set(true)
+                optimize.set(true)
+                configurationFiles.from(project.file("proguard-rules.pro"))
+            }
+
+            // Оставляем только жизненно важные части Java
+            modules("java.desktop", "java.logging", "java.xml")
+
+            // Специфические настройки для Linux
             linux {
-                shortcut = true // Создает ярлык в меню приложений
-                menuGroup = "Utility" // Группа в меню (Утилиты)
-                iconFile.set(project.file("metadata/CalcKb.png")) // ПУТЬ К ТВОЕЙ ИКОНКЕ
+                shortcut = true
+                menuGroup = "Utility"
+                debMaintainer = "erlbriton@example.com"
+            }
+
+            // Специфические настройки для Windows
+            windows {
+                shortcut = true
+                menu = true
+                // Укажи путь к иконке, если она есть
+                // iconFile.set(project.file("metadata/icon.ico"))
             }
         }
     }

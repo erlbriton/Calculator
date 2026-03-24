@@ -7,7 +7,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -25,58 +29,112 @@ fun App(
     var calcMode by remember { mutableIntStateOf(0) } // 0 - Std, 1 - Prg
     var showAbout by remember { mutableStateOf(false) }
 
-    // Автоматическое изменение размера окна (About = Prg Size)
+    val focusRequester = remember { FocusRequester() }
+
     LaunchedEffect(calcMode, showAbout) {
-        windowState.size = when {
-            showAbout || calcMode == 1 -> DpSize(477.dp, 600.dp)
-            else -> DpSize(240.dp, 400.dp)
-        }
+        windowState.size = if (showAbout || calcMode == 1) DpSize(477.dp, 600.dp) else DpSize(240.dp, 400.dp)
+        focusRequester.requestFocus()
     }
 
     MaterialTheme {
         Surface(
-            modifier = Modifier.fillMaxSize().focusable(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        val isShiftPressed = keyEvent.isShiftPressed
+                        val currentRadix = if (calcMode == 1) radixMode else "DEC"
+
+                        // Обработка Enter в первую очередь
+                        if (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter) {
+                            if (!showAbout) logic.onInput("=", currentRadix)
+                            return@onKeyEvent true
+                        }
+
+                        when (keyEvent.key) {
+                            Key.Spacebar -> {
+                                if (!showAbout) calcMode = if (calcMode == 0) 1 else 0
+                                return@onKeyEvent true
+                            }
+                            Key.A -> {
+                                if (currentRadix != "HEX") {
+                                    showAbout = !showAbout
+                                    return@onKeyEvent true
+                                }
+                            }
+                        }
+
+                        val command: String? = when (keyEvent.key) {
+                            Key.Zero, Key.NumPad0 -> "0"
+                            Key.One, Key.NumPad1 -> "1"
+                            Key.Two, Key.NumPad2 -> "2"
+                            Key.Three, Key.NumPad3 -> "3"
+                            Key.Four, Key.NumPad4 -> "4"
+                            Key.Five, Key.NumPad5 -> "5"
+                            Key.Six, Key.NumPad6 -> "6"
+                            Key.Seven, Key.NumPad7 -> "7"
+                            Key.Eight -> if (isShiftPressed) "*" else "8"
+                            Key.NumPad8 -> "8"
+                            Key.Nine, Key.NumPad9 -> "9"
+                            Key.A -> if (currentRadix == "HEX") "A" else null
+                            Key.B -> if (currentRadix == "HEX") "B" else null
+                            Key.C -> if (currentRadix == "HEX") "C" else null
+                            Key.D -> if (currentRadix == "HEX") "D" else null
+                            Key.E -> if (currentRadix == "HEX") "E" else null
+                            Key.F -> if (currentRadix == "HEX") "F" else null
+                            Key.Plus, Key.NumPadAdd -> "+"
+                            Key.Minus, Key.NumPadSubtract -> "-"
+                            Key.NumPadMultiply -> "*"
+                            Key.Slash, Key.NumPadDivide -> "/"
+                            Key.R -> "√"
+                            Key.Comma, Key.NumPadDot, Key.Period -> ","
+                            Key.Backspace -> "←"
+                            Key.Escape, Key.Delete -> "RESET_ALL"
+                            else -> null
+                        }
+
+                        if (command != null && !showAbout) {
+                            val isDigit = command.all { it.isDigit() }
+                            val canInput = when (currentRadix) {
+                                "BIN" -> if (isDigit) (command == "0" || command == "1") else true
+                                else -> true
+                            }
+                            if (canInput) {
+                                logic.onInput(command, currentRadix)
+                                return@onKeyEvent true
+                            }
+                        }
+                    }
+                    false
+                },
             color = Color.LightGray
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
-                // Панель выбора режимов
                 Row(
                     modifier = Modifier.fillMaxWidth().height(38.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ModeButton("Std", calcMode == 0 && !showAbout, {
-                        calcMode = 0
-                        showAbout = false
-                    }, Modifier.weight(1f))
-
-                    ModeButton("Prg", calcMode == 1 && !showAbout, {
-                        calcMode = 1
-                        showAbout = false
-                    }, Modifier.weight(1f))
-
-                    ModeButton("About", showAbout, {
-                        showAbout = true
-                    }, Modifier.weight(1f))
+                    ModeButton("Std", calcMode == 0 && !showAbout, { calcMode = 0; showAbout = false }, Modifier.weight(1f))
+                    ModeButton("Prg", calcMode == 1 && !showAbout, { calcMode = 1; showAbout = false }, Modifier.weight(1f))
+                    ModeButton("About", showAbout, { showAbout = true }, Modifier.weight(1f))
                 }
 
                 Spacer(Modifier.height(12.dp))
 
                 if (showAbout) {
-                    // Контент блока ABOUT (занимает всё пространство окна Prg)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.White, RoundedCornerShape(8.dp))
-                            .padding(24.dp)
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.White, RoundedCornerShape(8.dp)).padding(24.dp)) {
                         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            Text("Embedded Calc v1.1", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color(0xFF566EAC))
+                            Text("Embedded Calc v1.3", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color(0xFF566EAC))
                             Spacer(Modifier.height(12.dp))
-                            Text("Инженерный инструмент разработчика для работы с регистрами и битами (STM32/Embedded).", fontSize = 14.sp)
+                            Text("Инженерный инструмент разработчика (STM32/Embedded).", fontSize = 14.sp)
                             Spacer(Modifier.height(16.dp))
-                            Text("Функции:", fontWeight = FontWeight.SemiBold)
-                            val f = listOf("64-битный Long", "Побитовая панель 0-63", "HEX/BIN/DEC", "Сдвиги RoL/RoR/Lsh/Rsh", "Копирование по Ctrl+C")
-                            f.forEach { Text("• $it", fontSize = 13.sp) }
+                            Text("Barsik Power User Mode:", fontWeight = FontWeight.SemiBold, color = Color(0xFF507DA4))
+                            Text("• [Space] — Смена режима", fontSize = 13.sp)
+                            Text("• [Enter] — Результат (=)", fontSize = 13.sp)
+                            Text("• [R] — Корень (√)", fontSize = 13.sp)
+
                             Spacer(Modifier.height(24.dp))
                             Text("Created by Vasiltsov Yurii", fontWeight = FontWeight.Medium)
                             Text("telebite@yandex.ru")
@@ -88,13 +146,10 @@ fun App(
                                 onClick = { showAbout = false },
                                 modifier = Modifier.align(Alignment.End).padding(top = 20.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF566EAC))
-                            ) {
-                                Text("Вернуться", color = Color.White)
-                            }
+                            ) { Text("Вернуться", color = Color.White) }
                         }
                     }
                 } else {
-                    // Основной экран калькулятора
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -130,16 +185,47 @@ fun App(
     }
 }
 
-// --- ВСЕ ТВОИ ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
+// --- Кнопки с запретом фокуса ---
+
+@Composable
+fun CalcButton(text: String, modifier: Modifier, enabled: Boolean = true, isAccent: Boolean = false, onClick: () -> Unit = {}) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.focusProperties { canFocus = false },
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isAccent) Color(0xFF788EAF) else Color(0xFF5493A8),
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFFF5F5F5)
+        )
+    ) { Text(text, fontSize = 14.sp) }
+}
+
+@Composable
+fun ModeButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.fillMaxHeight().focusProperties { canFocus = false },
+        shape = RoundedCornerShape(4.dp),
+        contentPadding = PaddingValues(0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) Color(0xFF566EAC) else Color.White,
+            contentColor = if (isSelected) Color.White else Color(0xFF507DA4)
+        ),
+        border = BorderStroke(1.dp, Color(0xFF505EA4))
+    ) { Text(text, fontSize = 14.sp) }
+}
+
+// --- Остальные компоненты (без изменений фокуса) ---
 
 @Composable
 fun StandardLayout(onInput: (String) -> Unit) {
     Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("←", "CE", "C", "±", "√").forEach { char ->
-                CalcButton(char, Modifier.weight(1f).height(42.dp)) {
-                    onInput(if (char == "C") "RESET_ALL" else char)
-                }
+                CalcButton(char, Modifier.weight(1f).height(42.dp)) { onInput(if (char == "C") "RESET_ALL" else char) }
             }
         }
         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -196,10 +282,10 @@ fun ProgrammerLayout(logic: CalculatorLogic, radix: String, onRadixChange: (Stri
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEachIndexed { index, char ->
                             val isDigit = char.any { it.isDigit() }
-                            val isHexL = index == 0 && char.length == 1 && char[0] in 'A'..'E'
+                            val isHexLetter = index == 0 && char.length == 1 && char[0] in 'A'..'E'
                             val isEnabled = when (radix) {
-                                "BIN" -> if (isDigit) (char == "0" || char == "1") else !isHexL
-                                "DEC" -> !isHexL
+                                "BIN" -> if (isDigit) (char == "0" || char == "1") else !isHexLetter
+                                "DEC" -> !isHexLetter
                                 else -> true
                             }
                             CalcButton(char, Modifier.size(if (char == "0") 86.dp else 40.dp, 40.dp), isEnabled) {
@@ -215,32 +301,6 @@ fun ProgrammerLayout(logic: CalculatorLogic, radix: String, onRadixChange: (Stri
             }
         }
     }
-}
-
-@Composable
-fun CalcButton(text: String, modifier: Modifier, enabled: Boolean = true, isAccent: Boolean = false, onClick: () -> Unit = {}) {
-    Button(
-        onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(8.dp),
-        contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isAccent) Color(0xFF788EAF) else Color(0xFF5493A8),
-            contentColor = if (isAccent) Color.White else Color.Black,
-            disabledContainerColor = Color(0xFFF5F5F5)
-        )
-    ) { Text(text, fontSize = 14.sp) }
-}
-
-@Composable
-fun ModeButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(
-        onClick = onClick, modifier = modifier.fillMaxHeight(), shape = RoundedCornerShape(4.dp),
-        contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) Color(0xFF566EAC) else Color.White,
-            contentColor = if (isSelected) Color.White else Color(0xFF507DA4)
-        ),
-        border = BorderStroke(1.dp, Color(0xFF505EA4))
-    ) { Text(text, fontSize = 14.sp) }
 }
 
 @Composable

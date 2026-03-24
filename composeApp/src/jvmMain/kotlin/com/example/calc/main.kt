@@ -57,7 +57,7 @@ fun main() = application {
         title = "CalcKb",
         state = windowState,
         resizable = false,
-        alwaysOnTop = true
+        alwaysOnTop = false
     ) {
         LaunchedEffect(Unit) { window.requestFocus() }
         App(windowState, logic, radixMode, onRadixChange = { radixMode = it })

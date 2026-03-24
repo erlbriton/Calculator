@@ -3,6 +3,7 @@ package com.example.calc
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.math.sqrt
 
 class CalculatorLogic {
     var displayText by mutableStateOf("0")
@@ -24,26 +25,64 @@ class CalculatorLogic {
             }
             "←" -> {
                 if (!isWaitingForNextNumber) {
-                    displayText = if (displayText.length > 1) displayText.dropLast(1) else "0"
+                    displayText = if (displayText.length > 1) {
+                        val dropped = displayText.dropLast(1)
+                        if (dropped == "-") "0" else dropped
+                    } else "0"
                 }
             }
             "±" -> {
-                val currentValue = parseToLong(displayText, radixInt)
-                displayText = renderLong(-currentValue, radixInt)
+                if (radix == "DEC") {
+                    if (displayText != "0") {
+                        displayText = if (displayText.startsWith("-")) displayText.drop(1) else "-$displayText"
+                    }
+                } else {
+                    val currentValue = parseToLong(displayText, radixInt)
+                    displayText = renderLong(-currentValue, radixInt)
+                }
+            }
+            // --- ВОТ ИСПРАВЛЕНИЕ ДЛЯ КОРНЯ ---
+            "√" -> {
+                if (radix == "DEC") {
+                    val currentValue = parseToDouble(displayText, 10)
+                    if (currentValue >= 0) {
+                        displayText = formatDec(sqrt(currentValue))
+                    } else {
+                        displayText = "Error"
+                    }
+                    isWaitingForNextNumber = true
+                }
             }
             "Not" -> {
                 val currentValue = parseToLong(displayText, radixInt)
                 displayText = renderLong(currentValue.inv(), radixInt)
                 isWaitingForNextNumber = true
             }
-            "+", "-", "*", "/", "Mod", "And", "Or", "Xor", "Lsh", "Rsh", "RoL", "RoR" -> {
-                firstOperand = parseToDouble(displayText, radixInt)
+            "+", "-", "*", "/", "Mod", "And", "Or", "Xor", "Lsh", "Rsh", "RoL", "RoR", "%", "1/x" -> {
+                val currentVal = parseToDouble(displayText, radixInt)
+
+                // Обработка быстрых операций (однооперандных)
+                when (char) {
+                    "%" -> {
+                        displayText = formatDec(currentVal / 100.0)
+                        isWaitingForNextNumber = true
+                        return
+                    }
+                    "1/x" -> {
+                        displayText = if (currentVal != 0.0) formatDec(1.0 / currentVal) else "Error"
+                        isWaitingForNextNumber = true
+                        return
+                    }
+                }
+
+                firstOperand = currentVal
                 currentOperation = char
                 isWaitingForNextNumber = true
             }
             "=" -> {
                 val secondOperand = parseToDouble(displayText, radixInt)
                 if (radix == "DEC") {
+                    // Если операция не выбрана, результат — это само введенное число
                     val res = when (currentOperation) {
                         "+" -> firstOperand + secondOperand
                         "-" -> firstOperand - secondOperand
@@ -75,12 +114,22 @@ class CalculatorLogic {
                 currentOperation = null
                 isWaitingForNextNumber = true
             }
-            else -> {
-                if (isWaitingForNextNumber || displayText == "0") {
-                    displayText = char
+            else -> { // Обработка цифр 0-9, A-F и запятой
+                if (isWaitingForNextNumber) {
+                    displayText = if (char == ",") "0," else char
                     isWaitingForNextNumber = false
                 } else {
-                    if (displayText.length < 16) displayText += char
+                    if (char == ",") {
+                        if (!displayText.contains(",")) {
+                            displayText += ","
+                        }
+                    } else {
+                        if (displayText == "0") {
+                            displayText = char
+                        } else if (displayText.length < 16) {
+                            displayText += char
+                        }
+                    }
                 }
             }
         }
@@ -104,8 +153,27 @@ class CalculatorLogic {
         displayText = renderLong(v, newInt)
     }
 
-    private fun parseToLong(txt: String, r: Int) = txt.toULongOrNull(r)?.toLong() ?: 0L
-    private fun parseToDouble(txt: String, r: Int) = if (r == 10) txt.replace(",", ".").toDoubleOrNull() ?: 0.0 else parseToLong(txt, r).toDouble()
+    private fun parseToLong(txt: String, r: Int): Long {
+        val cleanTxt = txt.split(",")[0]
+        return cleanTxt.toULongOrNull(r)?.toLong() ?: 0L
+    }
+
+    private fun parseToDouble(txt: String, r: Int): Double {
+        return if (r == 10) {
+            txt.replace(",", ".").toDoubleOrNull() ?: 0.0
+        } else {
+            parseToLong(txt, r).toDouble()
+        }
+    }
+
     private fun renderLong(v: Long, r: Int) = if (r == 10) v.toString() else v.toULong().toString(r).uppercase()
-    private fun formatDec(v: Double) = v.toString().replace(".0", "").replace(".", ",")
+
+    private fun formatDec(v: Double): String {
+        val s = v.toString()
+        return if (s.endsWith(".0")) {
+            s.substringBefore(".0")
+        } else {
+            s.replace(".", ",")
+        }
+    }
 }

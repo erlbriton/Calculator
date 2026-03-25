@@ -17,7 +17,10 @@ class CalculatorLogic {
         val radixInt = if (radix == "HEX") 16 else if (radix == "BIN") 2 else 10
 
         when (char) {
-            "RESET_ALL", "C", "CE" -> {
+            // "RESET_ALL" — это наш гарантированный сброс из Main.kt
+            // "C" и "CE" работают как сброс ТОЛЬКО если это не HEX режим
+            "RESET_ALL", "CE",
+            if (radix != "HEX") "C" else "NOT_A_CLEAR_COMMAND" -> {
                 displayText = "0"
                 firstOperand = 0.0
                 currentOperation = null
@@ -41,7 +44,6 @@ class CalculatorLogic {
                     displayText = renderLong(-currentValue, radixInt)
                 }
             }
-            // --- ВОТ ИСПРАВЛЕНИЕ ДЛЯ КОРНЯ ---
             "√" -> {
                 if (radix == "DEC") {
                     val currentValue = parseToDouble(displayText, 10)
@@ -61,7 +63,6 @@ class CalculatorLogic {
             "+", "-", "*", "/", "Mod", "And", "Or", "Xor", "Lsh", "Rsh", "RoL", "RoR", "%", "1/x" -> {
                 val currentVal = parseToDouble(displayText, radixInt)
 
-                // Обработка быстрых операций (однооперандных)
                 when (char) {
                     "%" -> {
                         displayText = formatDec(currentVal / 100.0)
@@ -82,7 +83,6 @@ class CalculatorLogic {
             "=" -> {
                 val secondOperand = parseToDouble(displayText, radixInt)
                 if (radix == "DEC") {
-                    // Если операция не выбрана, результат — это само введенное число
                     val res = when (currentOperation) {
                         "+" -> firstOperand + secondOperand
                         "-" -> firstOperand - secondOperand
@@ -114,7 +114,7 @@ class CalculatorLogic {
                 currentOperation = null
                 isWaitingForNextNumber = true
             }
-            else -> { // Обработка цифр 0-9, A-F и запятой
+            else -> { // Сюда теперь будет попадать "C" в режиме HEX
                 if (isWaitingForNextNumber) {
                     displayText = if (char == ",") "0," else char
                     isWaitingForNextNumber = false

@@ -7,8 +7,9 @@ plugins {
     alias(libs.plugins.composeHotReload)
 }
 
-// Определяем ОС для автоматического выбора формата
+// Определяем ОС для автоматического выбора параметров
 val osName = System.getProperty("os.name").lowercase()
+val isWindows = osName.contains("windows")
 
 kotlin {
     jvm()
@@ -37,7 +38,7 @@ compose.desktop {
         nativeDistributions {
             // АВТОМАТИЧЕСКИЙ ВЫБОР ФОРМАТА
             targetFormats(
-                if (osName.contains("windows")) TargetFormat.Exe else TargetFormat.Deb
+                if (isWindows) TargetFormat.Exe else TargetFormat.Deb
             )
 
             packageName = "calckb"
@@ -55,19 +56,24 @@ compose.desktop {
             // Оставляем только жизненно важные части Java
             modules("java.desktop", "java.logging", "java.xml")
 
-            // Специфические настройки для Linux
+            // Специфические настройки для Linux (Kubuntu)
             linux {
                 shortcut = true
                 menuGroup = "Utility"
                 debMaintainer = "erlbriton@example.com"
+
+                // Если захочешь иконку в Linux, положи PNG в composeApp
+                 iconFile.set(project.file("CalcKb.png"))
             }
 
             // Специфические настройки для Windows
             windows {
                 shortcut = true
                 menu = true
-                // Укажи путь к иконке, если она есть
-                // iconFile.set(project.file("metadata/icon.ico"))
+                // Указываем иконку только если мы на Windows
+                if (isWindows && project.file("CalcKb.ico").exists()) {
+                    iconFile.set(project.file("CalcKb.ico"))
+                }
             }
         }
     }

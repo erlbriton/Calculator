@@ -17,8 +17,6 @@ class CalculatorLogic {
         val radixInt = if (radix == "HEX") 16 else if (radix == "BIN") 2 else 10
 
         when (char) {
-            // "RESET_ALL" — это наш гарантированный сброс из Main.kt
-            // "C" и "CE" работают как сброс ТОЛЬКО если это не HEX режим
             "RESET_ALL", "CE",
             if (radix != "HEX") "C" else "NOT_A_CLEAR_COMMAND" -> {
                 displayText = "0"
@@ -76,45 +74,21 @@ class CalculatorLogic {
                     }
                 }
 
-                firstOperand = currentVal
+                // ИСПРАВЛЕНИЕ: Если уже есть операция в очереди, сначала вычисляем её
+                if (currentOperation != null && !isWaitingForNextNumber) {
+                    performCalculation(radixInt, radix)
+                }
+
+                firstOperand = parseToDouble(displayText, radixInt)
                 currentOperation = char
                 isWaitingForNextNumber = true
             }
             "=" -> {
-                val secondOperand = parseToDouble(displayText, radixInt)
-                if (radix == "DEC") {
-                    val res = when (currentOperation) {
-                        "+" -> firstOperand + secondOperand
-                        "-" -> firstOperand - secondOperand
-                        "*" -> firstOperand * secondOperand
-                        "/" -> if (secondOperand != 0.0) firstOperand / secondOperand else 0.0
-                        else -> secondOperand
-                    }
-                    displayText = formatDec(res)
-                } else {
-                    val fL = firstOperand.toLong()
-                    val sL = secondOperand.toLong()
-                    val resL = when (currentOperation) {
-                        "+" -> fL + sL
-                        "-" -> fL - sL
-                        "*" -> fL * sL
-                        "/" -> if (sL != 0L) fL / sL else 0L
-                        "Mod" -> if (sL != 0L) fL % sL else 0L
-                        "And" -> fL and sL
-                        "Or" -> fL or sL
-                        "Xor" -> fL xor sL
-                        "Lsh" -> fL shl sL.toInt()
-                        "Rsh" -> fL ushr sL.toInt()
-                        "RoL" -> java.lang.Long.rotateLeft(fL, sL.toInt())
-                        "RoR" -> java.lang.Long.rotateRight(fL, sL.toInt())
-                        else -> sL
-                    }
-                    displayText = renderLong(resL, radixInt)
-                }
+                performCalculation(radixInt, radix)
                 currentOperation = null
                 isWaitingForNextNumber = true
             }
-            else -> { // Сюда теперь будет попадать "C" в режиме HEX
+            else -> {
                 if (isWaitingForNextNumber) {
                     displayText = if (char == ",") "0," else char
                     isWaitingForNextNumber = false
@@ -132,6 +106,42 @@ class CalculatorLogic {
                     }
                 }
             }
+        }
+    }
+
+    // Вынес расчет в отдельный метод, чтобы использовать и для "=" и для цепочек "+-*/"
+    private fun performCalculation(radixInt: Int, radix: String) {
+        if (currentOperation == null) return
+
+        val secondOperand = parseToDouble(displayText, radixInt)
+        if (radix == "DEC") {
+            val res = when (currentOperation) {
+                "+" -> firstOperand + secondOperand
+                "-" -> firstOperand - secondOperand
+                "*" -> firstOperand * secondOperand
+                "/" -> if (secondOperand != 0.0) firstOperand / secondOperand else 0.0
+                else -> secondOperand
+            }
+            displayText = formatDec(res)
+        } else {
+            val fL = firstOperand.toLong()
+            val sL = secondOperand.toLong()
+            val resL = when (currentOperation) {
+                "+" -> fL + sL
+                "-" -> fL - sL
+                "*" -> fL * sL
+                "/" -> if (sL != 0L) fL / sL else 0L
+                "Mod" -> if (sL != 0L) fL % sL else 0L
+                "And" -> fL and sL
+                "Or" -> fL or sL
+                "Xor" -> fL xor sL
+                "Lsh" -> fL shl sL.toInt()
+                "Rsh" -> fL ushr sL.toInt()
+                "RoL" -> java.lang.Long.rotateLeft(fL, sL.toInt())
+                "RoR" -> java.lang.Long.rotateRight(fL, sL.toInt())
+                else -> sL
+            }
+            displayText = renderLong(resL, radixInt)
         }
     }
 
